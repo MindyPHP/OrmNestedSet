@@ -1,36 +1,24 @@
-sudo: false
 language: php
 
 php:
-    - 5.5
-    - 5.6
     - 7.0
     - 7.1
-    - hhvm
+    - 7.2
 
 services:
   - postgresql
   - mysql
 
 matrix:
-    allow_failures:
-        - php: hhvm
-    fast_finish: true
-
-cache:
-    directories:
-        - $HOME/.composer/cache
-
-before_install:
-    - composer self-update
-    - if [ "$TRAVIS_PHP_VERSION" != "hhvm" ]; then wget http://cs.sensiolabs.org/download/php-cs-fixer-v2.phar -O php-cs-fixer; fi
-
-install: travis_retry composer install --no-interaction --prefer-source
+  fast_finish: true
 
 before_script:
     - mysql -e 'CREATE DATABASE IF NOT EXISTS test;'
     - psql -c 'create database test;' -U postgres
+    - travis_retry composer install --prefer-source --no-interaction
 
 script:
-    - if [ "$TRAVIS_PHP_VERSION" != "hhvm" ]; then php ./php-cs-fixer fix --config=.php_cs --using-cache=no --verbose --diff --dry-run; fi
-    - vendor/bin/phpunit
+    - vendor/bin/phpunit --coverage-clover=coverage.xml
+
+after_success:
+    - bash <(curl -s https://codecov.io/bash)

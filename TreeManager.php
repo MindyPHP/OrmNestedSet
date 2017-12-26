@@ -1,8 +1,9 @@
 <?php
 
+declare(strict_types=1);
+
 /*
- * This file is part of Mindy Orm.
- * (c) 2017 Maxim Falaleev
+ * Studio 107 (c) 2017 Maxim Falaleev
  *
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
@@ -20,10 +21,13 @@ class TreeManager extends Manager
      */
     public function getQuerySet()
     {
-        if ($this->qs === null) {
+        if (null === $this->qs) {
+            $model = $this->getModel();
+
             $this->qs = new TreeQuerySet([
-                'model' => $this->getModel(),
-                'modelClass' => get_class($this->getModel()),
+                'model' => $model,
+                'modelClass' => get_class($model),
+                'connection' => $model->getConnection(),
             ]);
             $this->qs->order(['lft']);
         }
@@ -151,7 +155,7 @@ class TreeManager extends Manager
     {
         $i = 0;
         $skip = [];
-        while ($this->filter(['lft__isnull' => true])->count() != 0) {
+        while (0 != $this->filter(['lft__isnull' => true])->count()) {
             ++$i;
             $fixed = 0;
             echo 'Iteration: '.$i.PHP_EOL;

@@ -1,8 +1,9 @@
 <?php
 
+declare(strict_types=1);
+
 /*
- * This file is part of Mindy Orm.
- * (c) 2017 Maxim Falaleev
+ * Studio 107 (c) 2017 Maxim Falaleev
  *
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
@@ -98,7 +99,7 @@ abstract class TreeModel extends Model
      */
     public function getIsLeaf()
     {
-        return $this->rgt - $this->lft === 1;
+        return 1 === $this->rgt - $this->lft;
     }
 
     /**
@@ -108,7 +109,7 @@ abstract class TreeModel extends Model
      */
     public function getIsRoot()
     {
-        return $this->lft == 1;
+        return 1 == $this->lft;
     }
 
     /**
@@ -140,12 +141,12 @@ abstract class TreeModel extends Model
             if ($saved = parent::save($fields)) {
                 if ($this->parent) {
                     $this->moveAsLast($this->parent);
-                } elseif ($this->isRoot() == false) {
+                } elseif (false == $this->isRoot()) {
                     $this->moveAsRoot();
                 }
-                    /** @var array $parent */
-                    $parent = $this->objects()->asArray()->get(['pk' => $this->pk]);
-                if ($parent !== null) {
+                /** @var array $parent */
+                $parent = $this->objects()->asArray()->get(['pk' => $this->pk]);
+                if (null !== $parent) {
                     $this->setAttributes($parent);
                     $this->setIsNewRecord(false);
                 }
@@ -163,7 +164,7 @@ abstract class TreeModel extends Model
     {
         $fields = ['lft', 'rgt', 'level', 'root'];
 
-        if ($this->parent == null) {
+        if (null == $this->parent) {
             $this->lft = 1;
             $this->rgt = 2;
             $this->level = 0;
@@ -216,7 +217,7 @@ abstract class TreeModel extends Model
      *
      * @return bool whether the prepending succeeds
      */
-    public function prependTo(TreeModel $target)
+    public function prependTo(self $target)
     {
         return $this->addNode($target, $target->lft + 1, 1);
     }
@@ -228,7 +229,7 @@ abstract class TreeModel extends Model
      *
      * @return bool whether the prepending succeeds
      */
-    public function prepend(TreeModel $target)
+    public function prepend(self $target)
     {
         return $target->prependTo($this);
     }
@@ -240,7 +241,7 @@ abstract class TreeModel extends Model
      *
      * @return bool whether the appending succeeds
      */
-    public function appendTo(TreeModel $target)
+    public function appendTo(self $target)
     {
         return $this->addNode($target, (int) $target->rgt, 1);
     }
@@ -252,7 +253,7 @@ abstract class TreeModel extends Model
      *
      * @return bool whether the appending succeeds
      */
-    public function append(TreeModel $target)
+    public function append(self $target)
     {
         return $target->appendTo($this);
     }
@@ -266,7 +267,7 @@ abstract class TreeModel extends Model
      *
      * @return bool whether the inserting succeeds
      */
-    public function insertBefore(TreeModel $target)
+    public function insertBefore(self $target)
     {
         return $this->addNode($target, $target->lft, 0);
     }
@@ -278,7 +279,7 @@ abstract class TreeModel extends Model
      *
      * @return bool whether the inserting succeeds
      */
-    public function insertAfter(TreeModel $target)
+    public function insertAfter(self $target)
     {
         return $this->addNode($target, $target->rgt + 1, 0);
     }
@@ -290,7 +291,7 @@ abstract class TreeModel extends Model
      *
      * @return bool whether the moving succeeds
      */
-    public function moveBefore(TreeModel $target)
+    public function moveBefore(self $target)
     {
         return $this->moveNode($target, $target->lft, 0);
     }
@@ -302,7 +303,7 @@ abstract class TreeModel extends Model
      *
      * @return bool whether the moving succeeds
      */
-    public function moveAfter(TreeModel $target)
+    public function moveAfter(self $target)
     {
         return $this->moveNode($target, $target->rgt + 1, 0);
     }
@@ -314,7 +315,7 @@ abstract class TreeModel extends Model
      *
      * @return bool whether the moving succeeds
      */
-    public function moveAsFirst(TreeModel $target)
+    public function moveAsFirst(self $target)
     {
         return $this->moveNode($target, $target->lft + 1, 1);
     }
@@ -326,7 +327,7 @@ abstract class TreeModel extends Model
      *
      * @return bool whether the moving succeeds
      */
-    public function moveAsLast(TreeModel $target)
+    public function moveAsLast(self $target)
     {
         return $this->moveNode($target, $target->rgt, 1);
     }
@@ -393,7 +394,7 @@ abstract class TreeModel extends Model
      */
     public function isLeaf()
     {
-        return $this->rgt - $this->lft === 1;
+        return 1 === $this->rgt - $this->lft;
     }
 
     /**
@@ -454,7 +455,7 @@ abstract class TreeModel extends Model
      *
      * @return $this
      */
-    private function addNode(TreeModel $target, $rgt, $levelUp)
+    private function addNode(self $target, $rgt, $levelUp)
     {
         if (!$this->getIsNewRecord()) {
             throw new Exception("The node can't be inserted because it is not new.");
@@ -519,7 +520,7 @@ abstract class TreeModel extends Model
      *
      * @return bool
      */
-    private function moveNode(TreeModel $target, $key, $levelUp)
+    private function moveNode(self $target, $key, $levelUp)
     {
         if ($this->getIsNewRecord()) {
             throw new Exception('The node should not be new record.');
