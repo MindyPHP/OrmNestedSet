@@ -1,8 +1,6 @@
-.idea
-*.lock
-/vendor
 .DS_Store
-*.log
+.idea
 phpunit.xml
-*.iml
-php-cs-fixer
+composer.lock
+/vendor
+/coverage

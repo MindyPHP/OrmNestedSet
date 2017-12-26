@@ -1,8 +1,9 @@
 <?php
 
+declare(strict_types=1);
+
 /*
- * This file is part of Mindy Orm.
- * (c) 2017 Maxim Falaleev
+ * Studio 107 (c) 2017 Maxim Falaleev
  *
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
@@ -39,13 +40,13 @@ class TreeQuerySet extends QuerySet
             'root' => $this->getModel()->root,
         ])->order(['lft']);
 
-        if ($includeSelf === false) {
+        if (false === $includeSelf) {
             $this->exclude([
                 'pk' => $this->getModel()->pk,
             ]);
         }
 
-        if ($depth !== null) {
+        if (null !== $depth) {
             $this->filter([
                 'level__lte' => $this->getModel()->level + $depth,
             ]);
@@ -82,13 +83,13 @@ class TreeQuerySet extends QuerySet
             'root' => $this->getModel()->root,
         ])->order(['-lft']);
 
-        if ($includeSelf === false) {
+        if (false === $includeSelf) {
             $this->exclude([
                 'pk' => $this->getModel()->pk,
             ]);
         }
 
-        if ($depth !== null) {
+        if (null !== $depth) {
             $qs = $qs->filter(['level__lte' => $this->getModel()->level - $depth]);
         }
 
@@ -363,7 +364,7 @@ class TreeQuerySet extends QuerySet
                     --$l;
                 }
                 // Stack is empty (we are inspecting the root)
-                if ($l == 0) {
+                if (0 == $l) {
                     // Assigning the root node
                     $i = count($trees);
                     $trees[$i] = $item;
