@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /*
- * Studio 107 (c) 2017 Maxim Falaleev
+ * Studio 107 (c) 2018 Maxim Falaleev
  *
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
@@ -13,11 +13,16 @@ namespace Mindy\Orm;
 
 /**
  * Class TreeManager.
+ *
+ * @method TreeModel|null get($conditions = [])
+ * @method array|TreeModel[] all()
+ *
+ * @property TreeModel $model
  */
 class TreeManager extends Manager
 {
     /**
-     * @return \Mindy\Orm\TreeQuerySet
+     * @return TreeQuerySet
      */
     public function getQuerySet()
     {
@@ -45,7 +50,9 @@ class TreeManager extends Manager
      */
     public function descendants($includeSelf = false, $depth = null)
     {
-        $this->getQuerySet()->descendants($includeSelf, $depth);
+        $this
+            ->getQuerySet()
+            ->descendants($includeSelf, $depth);
 
         return $this;
     }
@@ -59,7 +66,9 @@ class TreeManager extends Manager
      */
     public function children($includeSelf = false)
     {
-        $this->getQuerySet()->children($includeSelf);
+        $this
+            ->getQuerySet()
+            ->children($includeSelf);
 
         return $this;
     }
@@ -74,7 +83,9 @@ class TreeManager extends Manager
      */
     public function ancestors($includeSelf = false, $depth = null)
     {
-        $this->getQuerySet()->ancestors($includeSelf, $depth);
+        $this
+            ->getQuerySet()
+            ->ancestors($includeSelf, $depth);
 
         return $this;
     }
@@ -86,7 +97,9 @@ class TreeManager extends Manager
      */
     public function parents($includeSelf = false)
     {
-        $this->getQuerySet()->parents($includeSelf);
+        $this
+            ->getQuerySet()
+            ->parents($includeSelf);
 
         return $this;
     }
@@ -98,7 +111,9 @@ class TreeManager extends Manager
      */
     public function roots()
     {
-        $this->getQuerySet()->roots();
+        $this
+            ->getQuerySet()
+            ->roots();
 
         return $this;
     }
@@ -110,7 +125,9 @@ class TreeManager extends Manager
      */
     public function parent()
     {
-        $this->getQuerySet()->parent();
+        $this
+            ->getQuerySet()
+            ->parent();
 
         return $this;
     }
@@ -122,7 +139,9 @@ class TreeManager extends Manager
      */
     public function prev()
     {
-        $this->getQuerySet()->prev();
+        $this
+            ->getQuerySet()
+            ->prev();
 
         return $this;
     }
@@ -134,7 +153,9 @@ class TreeManager extends Manager
      */
     public function next()
     {
-        $this->getQuerySet()->next();
+        $this
+            ->getQuerySet()
+            ->next();
 
         return $this;
     }
@@ -146,11 +167,16 @@ class TreeManager extends Manager
      */
     public function asTree($key = 'items')
     {
-        $this->getQuerySet()->asTree($key);
+        $this
+            ->getQuerySet()
+            ->asTree($key);
 
         return $this;
     }
 
+    /**
+     * Completely rebuild broken tree
+     */
     public function rebuild()
     {
         $i = 0;
@@ -161,6 +187,7 @@ class TreeManager extends Manager
             echo 'Iteration: '.$i.PHP_EOL;
 
             $clone = clone $this;
+            /** @var TreeModel[] $models */
             $models = $clone
                 ->exclude(['pk__in' => $skip])
                 ->filter(['lft__isnull' => true])

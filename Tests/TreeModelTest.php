@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /*
- * Studio 107 (c) 2017 Maxim Falaleev
+ * Studio 107 (c) 2018 Maxim Falaleev
  *
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
@@ -15,10 +15,63 @@ abstract class TreeModelTest extends OrmDatabaseTestCase
 {
     protected function getModels()
     {
-        return [new NestedModel()];
+        return [
+            new NestedModel(),
+        ];
     }
 
-    public function testSaveNewRoot()
+    /**
+     * @throws \Exception
+     */
+    public function testMoveAsLast()
+    {
+        $root = new NestedModel(['name' => 'root']);
+        $this->assertTrue($root->save());
+        $this->assertEquals(1, $root->lft);
+        $this->assertEquals(2, $root->rgt);
+
+        $child1 = new NestedModel(['name' => 'child1', 'parent' => $root]);
+        $this->assertTrue($child1->save());
+
+        $child2 = new NestedModel(['name' => 'child2', 'parent' => $root]);
+        $this->assertTrue($child2->save());
+
+        $this->assertTrue($child1->moveAsLast($root)->save());
+
+        $child1 = NestedModel::objects()->get(['name' => 'child2']);
+        $this->assertEquals(4, $child1->lft);
+        $this->assertEquals(5, $child1->rgt);
+    }
+
+    /**
+     * root -> 1, 6
+     *      child1 4, 5
+     *      target 2, 3
+     * @throws \Exception
+     */
+//    public function testMoveAsFirst()
+//    {
+//        $root = new NestedModel(['name' => 'root']);
+//        $this->assertTrue($root->save());
+//        $child1 = new NestedModel(['name' => 'child1', 'parent' => $root]);
+//        $this->assertTrue($child1->save());
+//
+//        $target = new NestedModel(['name' => 'child2', 'parent' => $root]);
+//        $this->assertTrue($target->save());
+//        $this->assertEquals(4, $target->lft);
+//        $this->assertEquals(5, $target->rgt);
+//
+//        $root->refresh();
+//        $this->assertTrue($target->moveAsFirst($root));
+//        $target->refresh();
+//        $this->assertEquals(2, $target->lft);
+//        $this->assertEquals(3, $target->rgt);
+//    }
+
+    /**
+     * @throws \Exception
+     */
+    public function testRoot()
     {
         $model = new NestedModel(['name' => 'root']);
         $this->assertTrue($model->save());
@@ -31,62 +84,55 @@ abstract class TreeModelTest extends OrmDatabaseTestCase
         $this->assertEquals(2, $model->rgt);
     }
 
+    /**
+     * @throws \Exception
+     */
     public function testSaveNewChildToRoot()
     {
         $model = new NestedModel(['name' => 'root']);
         $this->assertTrue($model->save());
+        $this->assertEquals($model->root, $model->id);
         $this->assertEquals(1, $model->level);
-        $this->assertEquals(1, $model->pk);
-        $this->assertEquals(1, $model->id);
-        $this->assertEquals(1, $model->root);
-        $this->assertEquals(1, $model->lft);
         $this->assertEquals(2, $model->rgt);
+        $this->assertEquals(1, $model->lft);
 
         $child = new NestedModel(['name' => 'child', 'parent' => $model]);
         $this->assertTrue($child->save());
-        $this->assertEquals(2, $child->pk);
-        $this->assertEquals(2, $child->id);
+        $this->assertEquals($child->root, $child->parent_id);
         $this->assertEquals(2, $child->level);
-        $this->assertEquals(1, $child->root);
         $this->assertEquals(2, $child->lft);
         $this->assertEquals(3, $child->rgt);
 
         /** @var \Mindy\Orm\TreeModel $root */
         $root = NestedModel::objects()->get(['pk' => 1]);
+        $this->assertEquals($root->root, $root->id);
         $this->assertEquals(1, $root->level);
-        $this->assertEquals(1, $root->pk);
-        $this->assertEquals(1, $root->id);
-        $this->assertEquals(1, $root->root);
         $this->assertEquals(1, $root->lft);
         $this->assertEquals(4, $root->rgt);
     }
 
+    /**
+     * @throws \Exception
+     */
     public function testMoveChildFromRootToRoot()
     {
         $model = new NestedModel(['name' => 'root']);
         $this->assertTrue($model->save());
+        $this->assertEquals($model->root, $model->id);
         $this->assertEquals(1, $model->level);
-        $this->assertEquals(1, $model->pk);
-        $this->assertEquals(1, $model->id);
-        $this->assertEquals(1, $model->root);
         $this->assertEquals(1, $model->lft);
         $this->assertEquals(2, $model->rgt);
 
         $child = new NestedModel(['name' => 'child', 'parent' => $model]);
         $this->assertTrue($child->save());
-        $this->assertEquals(2, $child->pk);
-        $this->assertEquals(2, $child->id);
+        $this->assertEquals($child->root, $child->parent_id);
         $this->assertEquals(2, $child->level);
-        $this->assertEquals(1, $child->root);
         $this->assertEquals(2, $child->lft);
         $this->assertEquals(3, $child->rgt);
 
-        /** @var \Mindy\Orm\TreeModel $root */
         $root = NestedModel::objects()->get(['pk' => 1]);
+        $this->assertEquals($root->root, $root->id);
         $this->assertEquals(1, $root->level);
-        $this->assertEquals(1, $root->pk);
-        $this->assertEquals(1, $root->id);
-        $this->assertEquals(1, $root->root);
         $this->assertEquals(1, $root->lft);
         $this->assertEquals(4, $root->rgt);
 
@@ -95,23 +141,21 @@ abstract class TreeModelTest extends OrmDatabaseTestCase
 
         $child->parent = $newRoot;
         $this->assertTrue($child->save());
-        $this->assertEquals(2, $child->pk);
-        $this->assertEquals(2, $child->id);
+        $this->assertEquals($child->root, $child->id);
         $this->assertEquals(2, $child->level);
-        $this->assertEquals(2, $child->root);
         $this->assertEquals(2, $child->lft);
         $this->assertEquals(3, $child->rgt);
 
-        /** @var \Mindy\Orm\TreeModel $firstRoot */
         $firstRoot = NestedModel::objects()->get(['pk' => 1]);
+        $this->assertEquals($firstRoot->root, $firstRoot->id);
         $this->assertEquals(1, $firstRoot->level);
-        $this->assertEquals(1, $firstRoot->pk);
-        $this->assertEquals(1, $firstRoot->id);
-        $this->assertEquals(1, $firstRoot->root);
         $this->assertEquals(1, $firstRoot->lft);
         $this->assertEquals(2, $firstRoot->rgt);
     }
 
+    /**
+     * @throws \Exception
+     */
     public function testMoveChildFromRootToAnotherNode()
     {
         $model = new NestedModel(['name' => 'root']);
@@ -159,6 +203,9 @@ abstract class TreeModelTest extends OrmDatabaseTestCase
         $this->assertEquals(6, $level1->rgt);
     }
 
+    /**
+     * @throws \Exception
+     */
     public function testMoveRootToAnotherRoot()
     {
         $model = new NestedModel(['name' => 'root1']);
@@ -199,6 +246,9 @@ abstract class TreeModelTest extends OrmDatabaseTestCase
         $this->assertEquals(4, $root->rgt);
     }
 
+    /**
+     * @throws \Exception
+     */
     public function testDeleteRoot()
     {
         $root1 = new NestedModel(['name' => 'root1']);
@@ -232,23 +282,23 @@ abstract class TreeModelTest extends OrmDatabaseTestCase
         $this->assertEquals(2, $root2->rgt);
     }
 
+    /**
+     * @throws \Exception
+     */
     public function testDeleteNodeFromRoot()
     {
         $root1 = new NestedModel(['name' => 'root1']);
         $this->assertTrue($root1->save());
+        $this->assertEquals($root1->root, $root1->id);
         $this->assertEquals(1, $root1->level);
-        $this->assertEquals(1, $root1->pk);
-        $this->assertEquals(1, $root1->id);
-        $this->assertEquals(1, $root1->root);
         $this->assertEquals(1, $root1->lft);
         $this->assertEquals(2, $root1->rgt);
 
         $child = new NestedModel(['name' => 'child', 'parent' => $root1]);
         $this->assertTrue($child->save());
+        $this->assertEquals($child->parent_id, $child->root);
         $this->assertEquals(2, $child->level);
-        $this->assertEquals(2, $child->pk);
         $this->assertEquals(2, $child->id);
-        $this->assertEquals(1, $child->root);
         $this->assertEquals(2, $child->lft);
         $this->assertEquals(3, $child->rgt);
 
@@ -257,14 +307,16 @@ abstract class TreeModelTest extends OrmDatabaseTestCase
         /** @var \Mindy\Orm\TreeModel $root1 */
         $root1 = NestedModel::objects()->get(['name' => 'root1']);
         $this->assertTrue($root1->save());
+        $this->assertEquals($root1->id, $root1->root);
         $this->assertEquals(1, $root1->level);
-        $this->assertEquals(1, $root1->pk);
         $this->assertEquals(1, $root1->id);
-        $this->assertEquals(1, $root1->root);
         $this->assertEquals(1, $root1->lft);
         $this->assertEquals(2, $root1->rgt);
     }
 
+    /**
+     * @throws \Exception
+     */
     public function testDeleteNodeFromRootViaQuerySet()
     {
         $root1 = new NestedModel(['name' => 'root1']);
@@ -298,6 +350,9 @@ abstract class TreeModelTest extends OrmDatabaseTestCase
         $this->assertEquals(2, $root1->rgt);
     }
 
+    /**
+     * @throws \Exception
+     */
     public function testDeleteRootWithChildren()
     {
         $root1 = new NestedModel(['name' => 'root1']);
@@ -338,6 +393,9 @@ abstract class TreeModelTest extends OrmDatabaseTestCase
         $this->assertEquals(7, count($fields));
     }
 
+    /**
+     * @throws \Exception
+     */
     public function testTree()
     {
         $attrs = [
@@ -365,6 +423,8 @@ abstract class TreeModelTest extends OrmDatabaseTestCase
 
     /**
      * https://github.com/studio107/Mindy_Orm/issues/50.
+     *
+     * @throws \Mindy\Orm\Exception\MultipleObjectsReturned
      */
     public function testFixIsLeaf()
     {
@@ -389,6 +449,9 @@ abstract class TreeModelTest extends OrmDatabaseTestCase
         $this->assertTrue(NestedModel::objects()->get(['name' => 'root2'])->getIsLeaf());
     }
 
+    /**
+     * @throws \Exception
+     */
     private function buildTree()
     {
         /** @var \Mindy\Orm\TreeModel $root1 $root2 $nested $nested2 */
@@ -420,6 +483,9 @@ abstract class TreeModelTest extends OrmDatabaseTestCase
         $this->assertFalse($nested2->getIsRoot());
     }
 
+    /**
+     * @throws \Exception
+     */
     public function testFixIsLeafAutoRebuild()
     {
         /* @var \Mindy\Orm\TreeModel $root1 $root2 $nested $nested2 */
