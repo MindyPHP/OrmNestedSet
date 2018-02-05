@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /*
- * Studio 107 (c) 2017 Maxim Falaleev
+ * Studio 107 (c) 2018 Maxim Falaleev
  *
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
@@ -11,13 +11,14 @@ declare(strict_types=1);
 
 namespace Mindy\Orm;
 
-use Doctrine\DBAL\Connection;
 use Mindy\QueryBuilder\Expression;
 use Mindy\QueryBuilder\Q\QAndNot;
-use Mindy\QueryBuilder\QueryBuilder;
+use Mindy\QueryBuilder\QueryBuilderFactory;
 
 /**
  * Class TreeQuerySet.
+ *
+ * @method TreeModel getModel()
  */
 class TreeQuerySet extends QuerySet
 {
@@ -165,6 +166,11 @@ class TreeQuerySet extends QuerySet
         return ($max = $this->max('root')) ? $max + 1 : 1;
     }
 
+    /**
+     * @param string $key
+     *
+     * @return $this
+     */
     public function asTree($key = 'items')
     {
         $this->asArray(true);
@@ -174,11 +180,14 @@ class TreeQuerySet extends QuerySet
         return $this->order(['root', 'lft']);
     }
 
-    public function all()
+    /**
+     * {@inheritdoc}
+     */
+    public function all(): array
     {
-        $data = parent::all();
+        $rows = parent::all();
 
-        return $this->treeKey ? $this->toHierarchy($data) : $data;
+        return $this->treeKey ? $this->toHierarchy($rows) : $rows;
     }
 
     /**
@@ -194,24 +203,54 @@ class TreeQuerySet extends QuerySet
      *
      * Problem: we have nested1 with lft 2 and rgt 3 without root.
      * Need find it and delete.
+     *
+     * @param string $table
+     *
+     * @throws \Doctrine\DBAL\DBALException
+     * @throws \Mindy\QueryBuilder\Exception\NotSupportedException
+     *
+     * @return TreeQuerySet
      */
-    protected function deleteBranchWithoutRoot(Connection $db, $table)
+    protected function deleteBranchWithoutRoot(string $table)
     {
         $subQuery = clone $this->getQueryBuilder();
-        $subQuery->clear()->setTypeSelect()->from($table)->select('root')->where(['parent_id__isnull' => true]);
+        $subQuery
+            ->clear()
+            ->table($table)
+            ->select('root')
+            ->where(['parent_id__isnull' => true]);
 
         $query = clone $this->getQueryBuilder();
-        $query->clear()->setTypeSelect()->select(['id'])->from($table)->where([
-            'parent_id__isnull' => true,
-            new QAndNot(['root__in' => $subQuery]),
-        ]);
+        $sql = $query
+            ->clear()
+            ->select(['id'])
+            ->table($table)
+            ->where([
+                'parent_id__isnull' => true,
+                new QAndNot(['root__in' => $subQuery]),
+            ])
+            ->toSQL();
 
-        $ids = $db->query($query->toSQL())->fetchColumn();
+        $ids = $this
+            ->getConnection()
+            ->query($sql)
+            ->fetchColumn();
+
         if ($ids && count($ids) > 0) {
             $deleteQuery = clone $this->getQueryBuilder();
-            $deleteQuery->clear()->setTypeDelete()->from($table)->where(['id__in' => $ids]);
-            $db->query($deleteQuery->toSQL())->execute();
+            $sql = $deleteQuery
+                ->delete()
+                ->table($table)
+                ->where(['id__in' => $ids])
+                ->toSQL();
+
+            $this
+                ->getConnection()
+                ->query($sql)
+                ->execute();
         }
+
+        return $this;
     }
 
     /**
@@ -225,8 +264,15 @@ class TreeQuerySet extends QuerySet
      *
      * Problem: we have nested2 with lft 3 and rgt 4 without parent node.
      * Need find it and delete.
+     *
+     * @param string $table
+     *
+     * @throws \Doctrine\DBAL\DBALException
+     * @throws \Mindy\QueryBuilder\Exception\NotSupportedException
+     *
+     * @return TreeQuerySet
      */
-    protected function deleteBranchWithoutParent(Connection $db, $table)
+    protected function deleteBranchWithoutParent(string $table)
     {
         /*
         $query = new Query([
@@ -236,26 +282,47 @@ class TreeQuerySet extends QuerySet
         ]);
          */
         $subQuery = clone $this->getQueryBuilder();
-        $subQuery->clear()->setTypeSelect()->select(['id'])->from($table);
+        $subQuery
+            ->clear()
+            ->select(['id'])
+            ->table($table);
 
         $query = clone $this->getQueryBuilder();
-        $query->clear()->setTypeSelect()->select(['id', 'lft', 'rgt', 'root'])->from($table)->where([
-            new QAndNot(['parent_id__in' => $subQuery]),
-        ]);
+        $query
+            ->clear()
+            ->select(['id', 'lft', 'rgt', 'root'])
+            ->table($table)
+            ->where([
+                new QAndNot(['parent_id__in' => $subQuery]),
+            ]);
 
-        $rows = $db->query($query->toSQL())->fetchAll();
+        $rows = $this
+            ->getConnection()
+            ->query($query->toSQL())
+            ->fetchAll();
+
         foreach ($rows as $row) {
             $deleteQuery = clone $this->getQueryBuilder();
-            $deleteQuery->clear()->setTypeDelete()->from($table)->where([
-                'lft__gte' => $row['lft'],
-                'rgt__lte' => $row['rgt'],
-                'root' => $row['root'],
-            ]);
-            $db->query($deleteQuery->toSQL())->execute();
+            $deleteQuery
+                ->clear()
+                ->delete()
+                ->table($table)
+                ->where([
+                    'lft__gte' => $row['lft'],
+                    'rgt__lte' => $row['rgt'],
+                    'root' => $row['root'],
+                ]);
+
+            $this
+                ->getConnection()
+                ->query($deleteQuery->toSQL())
+                ->execute();
         }
+
+        return $this;
     }
 
-    /*
+    /**
      * Find and delete broken branches without root, parent
      * and with incorrect lft, rgt.
      *
@@ -269,21 +336,101 @@ class TreeQuerySet extends QuerySet
      *      WHERE tc.parent_id = t.id
      * )
      * ORDER BY rgt DESC
+     *
+     * @param $table
+     *
+     * @throws \Doctrine\DBAL\DBALException
+     * @throws \Mindy\QueryBuilder\Exception\NotSupportedException
+     *
+     * @return TreeQuerySet
      */
-    protected function rebuildLftRgt(Connection $db, $table)
+    protected function rebuildLftRgt(string $table)
     {
-        $subQuery = 'SELECT [[tt]].[[parent_id]] FROM '.$table.' AS [[tt]] WHERE [[tt]].[[parent_id]]=[[t]].[[id]]';
-        $where = 'NOT [[lft]]=([[rgt]]-1) AND NOT [[id]] IN ('.$subQuery.')';
-        $sql = 'SELECT [[id]], [[root]], [[lft]], [[rgt]], [[rgt]]-[[lft]]-1 AS [[move]] FROM '.$table.' AS [[t]] WHERE '.$where.' ORDER BY [[rgt]] ASC';
-        $adapter = QueryBuilder::getInstance($db)->getAdapter();
+        $builder = QueryBuilderFactory::getQueryBuilder($this->getConnection());
 
-        $rows = $db->query($adapter->quoteSql($sql))->fetchAll();
+        $subQuerySql = (clone $builder)
+            ->clear()
+            ->select('tt.parent_id')
+            ->table($table, 'tt')
+            ->where('tt.parent_id=t.id')
+            ->toSQL();
+
+        $sql = (clone $builder)
+            ->clear()
+            ->table($table, 't')
+            ->select('t.id, t.root, t.lft, t.rgt, t.rgt-t.lft-1 AS move')
+            ->where('NOT t.lft=(t.rgt-1) AND NOT t.id IN ('.$subQuerySql.')')
+            ->order('rgt ASC')
+            ->toSQL();
+
+        $rows = $this
+            ->getConnection()
+            ->query($sql)
+            ->fetchAll();
+
         foreach ($rows as $row) {
-            $sql = 'UPDATE '.$table.' SET [[lft]]=[[lft]]-'.$row['move'].', [[rgt]]=[[rgt]]-'.$row['move'].' WHERE [[root]]='.$row['root'].' AND [[lft]]>'.$row['rgt'];
-            $db->query($adapter->quoteSql($sql))->execute();
-            $sql = 'UPDATE '.$table.' SET [[rgt]]=[[rgt]]-'.$row['move'].' WHERE [[root]]='.$row['root'].' AND [[lft]]<[[rgt]] AND [[rgt]]>='.$row['rgt'];
-            $db->query($adapter->quoteSql($sql))->execute();
+            /*
+            $sql = strtr(
+                'UPDATE {table} SET lft=lft-{move}, rgt=rgt-{move} WHERE root={root} AND lft>{rgt}',
+                [
+                    '{table}' => $table,
+                    '{move}' => $row['move'],
+                    '{root}' => $row['root'],
+                    '{lft}' => $row['rgt'],
+                ]
+            );
+            */
+            $sql = (clone $builder)
+                ->clear()
+                ->update()
+                ->table($table)
+                ->values([
+                    'lft' => new Expression(sprintf('lft-%s', $row['move'])),
+                    'rgt' => new Expression(sprintf('rgt-%s', $row['move'])),
+                ])
+                ->where([
+                    'root' => $row['root'],
+                    'lft__gt' => $row['rgt'],
+                ])
+                ->toSQL();
+
+            $this
+                ->getConnection()
+                ->query($sql)
+                ->execute();
+
+            /*
+            $sql = strtr(
+                'UPDATE {table} SET rgt=rgt-{move} WHERE root={root} AND lft<{rgt} AND rgt>={rgt}',
+                [
+                    '{table}' => $table,
+                    '{move}' => $row['move'],
+                    '{root}' => $row['root'],
+                    '{lft}' => $row['rgt'],
+                ]
+            );
+            */
+            $sql = (clone $builder)
+                ->clear()
+                ->update()
+                ->table($table)
+                ->values([
+                    'rgt' => new Expression(sprintf('rgt-%s', $row['move'])),
+                ])
+                ->where([
+                    'root' => $row['root'],
+                    'lft__lt' => $row['rgt'],
+                    'rgt__gte' => $row['rgt'],
+                ])
+                ->toSQL();
+
+            $this
+                ->getConnection()
+                ->query($sql)
+                ->execute();
         }
+
+        return $this;
     }
 
     /**
@@ -294,17 +441,19 @@ class TreeQuerySet extends QuerySet
      */
     protected function findAndFixCorruptedTree()
     {
-        $model = $this->getModel();
-        $db = $model->getConnection();
-        $table = $model->tableName();
-        $this->deleteBranchWithoutRoot($db, $table);
-        $this->deleteBranchWithoutParent($db, $table);
-        $this->rebuildLftRgt($db, $table);
+        $table = $this->getModel()->tableName();
+
+        $this
+            ->deleteBranchWithoutRoot($table)
+            ->deleteBranchWithoutParent($table)
+            ->rebuildLftRgt($table);
     }
 
     /**
      * Пересчитываем дерево после удаления моделей через
      * $modelClass::objects()->filter(['pk__in' => $data])->delete();.
+     *
+     * @throws \Exception
      *
      * @return int
      */
@@ -327,8 +476,14 @@ class TreeQuerySet extends QuerySet
     private function shiftLeftRight($key, $delta, $root, $data)
     {
         foreach (['lft', 'rgt'] as $attribute) {
-            $this->filter([$attribute.'__gte' => $key, 'root' => $root])
-                ->update([$attribute => new Expression($attribute.sprintf('%+d', $delta))]);
+            $this
+                ->filter([
+                    $attribute.'__gte' => $key,
+                    'root' => $root,
+                ])
+                ->update([
+                    $attribute => new Expression($attribute.sprintf('%+d', $delta)),
+                ]);
 
             foreach ($data as &$item) {
                 if ($item[$attribute] >= $key) {
@@ -347,7 +502,7 @@ class TreeQuerySet extends QuerySet
      *
      * @return array
      */
-    public function toHierarchy($collection)
+    public function toHierarchy($collection): array
     {
         // Trees mapped
         $trees = [];

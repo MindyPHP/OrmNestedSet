@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /*
- * Studio 107 (c) 2017 Maxim Falaleev
+ * Studio 107 (c) 2018 Maxim Falaleev
  *
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
@@ -19,7 +19,7 @@ use Mindy\QueryBuilder\Expression;
 /**
  * Class TreeModel.
  *
- * @method static \Mindy\Orm\TreeManager objects($instance = null)
+ * @method static TreeManager objects($instance = null)
  *
  * @property TreeModel|null $parent
  * @property int|null $parent_id
@@ -62,7 +62,7 @@ abstract class TreeModel extends Model
     }
 
     /**
-     * @param null $instance
+     * @param null|ModelInterface $instance
      *
      * @return TreeManager
      */
@@ -81,23 +81,11 @@ abstract class TreeModel extends Model
     }
 
     /**
-     * @DEPRECATED
-     *
-     * @param null $instance
-     *
-     * @return TreeManager
-     */
-    public static function treeManager($instance = null)
-    {
-        return self::objectsManager($instance);
-    }
-
-    /**
      * Determines if node is leaf.
      *
      * @return bool whether the node is leaf
      */
-    public function getIsLeaf()
+    public function getIsLeaf(): bool
     {
         return 1 === $this->rgt - $this->lft;
     }
@@ -107,15 +95,10 @@ abstract class TreeModel extends Model
      *
      * @return bool whether the node is root
      */
-    public function getIsRoot()
+    public function getIsRoot(): bool
     {
         return 1 == $this->lft;
     }
-
-    /**
-     * @var bool
-     */
-    private $_deleted = false;
 
     /**
      * Create root node if multiple-root tree mode. Update node if it's not new.
@@ -137,13 +120,16 @@ abstract class TreeModel extends Model
 
             return parent::save($fields);
         }
+
         if (in_array('parent_id', $this->getDirtyAttributes())) {
-            if ($saved = parent::save($fields)) {
+            $saved = parent::save($fields);
+            if ($saved) {
                 if ($this->parent) {
                     $this->moveAsLast($this->parent);
-                } elseif (false == $this->isRoot()) {
+                } elseif ($this->isRoot()) {
                     $this->moveAsRoot();
                 }
+
                 /** @var array $parent */
                 $parent = $this->objects()->asArray()->get(['pk' => $this->pk]);
                 if (null !== $parent) {
@@ -164,7 +150,7 @@ abstract class TreeModel extends Model
     {
         $fields = ['lft', 'rgt', 'level', 'root'];
 
-        if (null == $this->parent) {
+        if (null === $this->parent) {
             $this->lft = 1;
             $this->rgt = 2;
             $this->level = 0;
@@ -195,19 +181,17 @@ abstract class TreeModel extends Model
      *
      * @return bool whether the deletion is successful
      */
-    public function delete()
+    public function delete(): bool
     {
         if ($this->isLeaf()) {
-            $result = parent::delete();
-        } else {
-            $result = $this->objects()->filter([
-                'lft__gte' => $this->lft,
-                'rgt__lte' => $this->rgt,
-                'root' => $this->root,
-            ])->delete();
+            return (bool)parent::delete();
         }
 
-        return (bool) $result;
+        return (bool)$this->objects()->filter([
+            'lft__gte' => $this->lft,
+            'rgt__lte' => $this->rgt,
+            'root' => $this->root,
+        ])->delete();
     }
 
     /**
@@ -215,23 +199,13 @@ abstract class TreeModel extends Model
      *
      * @param TreeModel $target the target
      *
-     * @return bool whether the prepending succeeds
+     * @throws Exception
+     *
+     * @return TreeModel whether the prepending succeeds
      */
     public function prependTo(self $target)
     {
-        return $this->addNode($target, $target->lft + 1, 1);
-    }
-
-    /**
-     * Prepends target to node as first child.
-     *
-     * @param TreeModel $target the target
-     *
-     * @return bool whether the prepending succeeds
-     */
-    public function prepend(self $target)
-    {
-        return $target->prependTo($this);
+        return $this->addNode($target, (int)$target->lft + 1, 1);
     }
 
     /**
@@ -239,23 +213,13 @@ abstract class TreeModel extends Model
      *
      * @param TreeModel $target the target
      *
-     * @return bool whether the appending succeeds
+     * @throws Exception
+     *
+     * @return $this
      */
     public function appendTo(self $target)
     {
-        return $this->addNode($target, (int) $target->rgt, 1);
-    }
-
-    /**
-     * Appends target to node as last child.
-     *
-     * @param TreeModel $target the target
-     *
-     * @return bool whether the appending succeeds
-     */
-    public function append(self $target)
-    {
-        return $target->appendTo($this);
+        return $this->addNode($target, (int)$target->rgt, 1);
     }
 
     /**
@@ -265,7 +229,7 @@ abstract class TreeModel extends Model
      *
      * @throws \Exception
      *
-     * @return bool whether the inserting succeeds
+     * @return $this
      */
     public function insertBefore(self $target)
     {
@@ -277,7 +241,9 @@ abstract class TreeModel extends Model
      *
      * @param TreeModel $target the target
      *
-     * @return bool whether the inserting succeeds
+     * @throws Exception
+     *
+     * @return $this
      */
     public function insertAfter(self $target)
     {
@@ -289,7 +255,9 @@ abstract class TreeModel extends Model
      *
      * @param TreeModel $target the target
      *
-     * @return bool whether the moving succeeds
+     * @throws Exception
+     *
+     * @return $this
      */
     public function moveBefore(self $target)
     {
@@ -301,7 +269,9 @@ abstract class TreeModel extends Model
      *
      * @param TreeModel $target the target
      *
-     * @return bool whether the moving succeeds
+     * @throws Exception
+     *
+     * @return $this
      */
     public function moveAfter(self $target)
     {
@@ -313,7 +283,9 @@ abstract class TreeModel extends Model
      *
      * @param TreeModel $target the target
      *
-     * @return bool whether the moving succeeds
+     * @throws Exception
+     *
+     * @return $this
      */
     public function moveAsFirst(self $target)
     {
@@ -325,7 +297,9 @@ abstract class TreeModel extends Model
      *
      * @param TreeModel $target the target
      *
-     * @return bool whether the moving succeeds
+     * @throws Exception
+     *
+     * @return $this
      */
     public function moveAsLast(self $target)
     {
@@ -338,7 +312,7 @@ abstract class TreeModel extends Model
      * @throws Exception
      * @throws \Exception
      *
-     * @return bool whether the moving succeeds
+     * @return $this
      */
     public function moveAsRoot()
     {
@@ -346,33 +320,29 @@ abstract class TreeModel extends Model
             throw new Exception('The node should not be new record.');
         }
 
-        if ($this->getIsDeletedRecord()) {
-            throw new Exception('The node should not be deleted.');
-        }
-
         if ($this->isRoot()) {
             throw new Exception('The node already is root node.');
         }
 
-        $left = $this->lft;
-        $right = $this->rgt;
-        $levelDelta = 1 - $this->level;
-        $delta = 1 - $left;
-        $this->objects()
+        $delta = 1 - $this->lft;
+        $this
+            ->objects()
             ->filter([
-                'lft__gte' => $left,
-                'rgt__lte' => $right,
+                'lft__gte' => $this->lft,
+                'rgt__lte' => $this->rgt,
                 'root' => $this->root,
             ])
             ->update([
-                'lft' => new Expression('lft'.sprintf('%+d', $delta)),
-                'rgt' => new Expression('rgt'.sprintf('%+d', $delta)),
-                'level' => new Expression('level'.sprintf('%+d', $levelDelta)),
+                'lft' => new Expression('lft' . sprintf('%+d', $delta)),
+                'rgt' => new Expression('rgt' . sprintf('%+d', $delta)),
+                'level' => new Expression('level' . sprintf('%+d', 1 - $this->level)),
                 'root' => $this->getMaxRoot(),
             ]);
-        $this->shiftLeftRight($right + 1, $left - $right - 1);
 
-        return true;
+        $this
+            ->shiftLeftRight($this->rgt + 1, $this->lft - $this->rgt - 1);
+
+        return $this;
     }
 
     /**
@@ -408,26 +378,6 @@ abstract class TreeModel extends Model
     }
 
     /**
-     * Returns if the current node is deleted.
-     *
-     * @return bool whether the node is deleted
-     */
-    public function getIsDeletedRecord()
-    {
-        return $this->_deleted;
-    }
-
-    /**
-     * Sets if the current node is deleted.
-     *
-     * @param bool $value whether the node is deleted
-     */
-    public function setIsDeletedRecord($value)
-    {
-        $this->_deleted = $value;
-    }
-
-    /**
      * @param int $value
      * @param int $delta
      */
@@ -436,20 +386,21 @@ abstract class TreeModel extends Model
         $conditions = ['root' => $this->root];
 
         foreach (['lft', 'rgt'] as $attribute) {
-            $qs = $this->objects()->filter(array_merge($conditions, [
-                $attribute.'__gte' => $value,
-            ]));
+            $where = array_merge($conditions, [$attribute . '__gte' => $value]);
 
-            $qs->update([
-                $attribute => new Expression('[['.$attribute.']]'.sprintf('%+d', $delta)),
-            ]);
+            $this
+                ->objects()
+                ->filter($where)
+                ->update([
+                    $attribute => new Expression($attribute . sprintf('%+d', $delta)),
+                ]);
         }
     }
 
     /**
      * @param TreeModel $target
-     * @param int       $rgt
-     * @param int       $levelUp
+     * @param int $rgt
+     * @param int $levelUp
      *
      * @throws \Exception
      *
@@ -459,14 +410,6 @@ abstract class TreeModel extends Model
     {
         if (!$this->getIsNewRecord()) {
             throw new Exception("The node can't be inserted because it is not new.");
-        }
-
-        if ($this->getIsDeletedRecord()) {
-            throw new Exception("The node can't be inserted because it is deleted.");
-        }
-
-        if ($target->getIsDeletedRecord()) {
-            throw new Exception("The node can't be inserted because target node is deleted.");
         }
 
         if ($this->pk == $target->pk) {
@@ -481,11 +424,9 @@ abstract class TreeModel extends Model
 
         $this->shiftLeftRight($rgt, 2);
 
-        $this->setAttributes([
-            'lft' => $rgt,
-            'rgt' => $rgt + 1,
-            'level' => $target->level + $levelUp,
-        ]);
+        $this->lft = $rgt;
+        $this->rgt = $rgt + 1;
+        $this->level = $target->level + $levelUp;
 
         return $this;
     }
@@ -510,28 +451,27 @@ abstract class TreeModel extends Model
         return $this;
     }
 
+    public function refresh()
+    {
+        $this->setAttributes($this->objects()->asArray()->get(['pk' => $this->pk]));
+        $this->setIsNewRecord(false);
+        return $this;
+    }
+
     /**
      * @param TreeModel $target
-     * @param int       $key
-     * @param int       $levelUp
+     * @param int $key
+     * @param int $levelUp
      *
      * @throws Exception
      * @throws \Exception
      *
-     * @return bool
+     * @return $this
      */
     private function moveNode(self $target, $key, $levelUp)
     {
         if ($this->getIsNewRecord()) {
             throw new Exception('The node should not be new record.');
-        }
-
-        if ($this->getIsDeletedRecord()) {
-            throw new Exception('The node should not be deleted.');
-        }
-
-        if ($target->getIsDeletedRecord()) {
-            throw new Exception('The target node should not be deleted.');
         }
 
         if ($this->pk == $target->pk) {
@@ -552,18 +492,29 @@ abstract class TreeModel extends Model
 
         if ($this->root !== $target->root) {
             foreach (['lft', 'rgt'] as $attribute) {
-                $this->objects()
-                    ->filter([$attribute.'__gte' => $key, 'root' => $target->root])
-                    ->update([$attribute => new Expression($attribute.sprintf('%+d', $right - $left + 1))]);
+                $this
+                    ->objects()
+                    ->filter([
+                        $attribute . '__gte' => $key,
+                        'root' => $target->root
+                    ])
+                    ->update([
+                        $attribute => new Expression($attribute . sprintf('%+d', $right - $left + 1))
+                    ]);
             }
 
             $delta = $key - $left;
-            $this->objects()
-                ->filter(['lft__gte' => $left, 'rgt__lte' => $right, 'root' => $this->root])
+            $this
+                ->objects()
+                ->filter([
+                    'lft__gte' => $left,
+                    'rgt__lte' => $right,
+                    'root' => $this->root
+                ])
                 ->update([
-                    'lft' => new Expression('lft'.sprintf('%+d', $delta)),
-                    'rgt' => new Expression('rgt'.sprintf('%+d', $delta)),
-                    'level' => new Expression('level'.sprintf('%+d', $levelDelta)),
+                    'lft' => new Expression('lft' . sprintf('%+d', $delta)),
+                    'rgt' => new Expression('rgt' . sprintf('%+d', $delta)),
+                    'level' => new Expression('level' . sprintf('%+d', $levelDelta)),
                     'root' => $target->root,
                 ]);
 
@@ -577,21 +528,33 @@ abstract class TreeModel extends Model
                 $right += $delta;
             }
 
-            $this->objects()
-                ->filter(['lft__gte' => $left, 'rgt__lte' => $right, 'root' => $this->root])
+            $this
+                ->objects()
+                ->filter([
+                    'lft__gte' => $left,
+                    'rgt__lte' => $right,
+                    'root' => $this->root
+                ])
                 ->update([
-                    'level' => new Expression('level'.sprintf('%+d', $levelDelta)),
+                    'level' => new Expression('level' . sprintf('%+d', $levelDelta)),
                 ]);
 
             foreach (['lft', 'rgt'] as $attribute) {
-                $this->objects()
-                    ->filter([$attribute.'__gte' => $left, $attribute.'__lte' => $right, 'root' => $this->root])
-                    ->update([$attribute => new Expression($attribute.sprintf('%+d', $key - $left))]);
+                $this
+                    ->objects()
+                    ->filter([
+                        $attribute . '__gte' => $left,
+                        $attribute . '__lte' => $right,
+                        'root' => $this->root
+                    ])
+                    ->update([
+                        $attribute => new Expression($attribute . sprintf('%+d', $key - $left))
+                    ]);
             }
 
             $this->shiftLeftRight($right + 1, -$delta);
         }
 
-        return true;
+        return $this;
     }
 }
